@@ -15,8 +15,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# =====================================================================
+# TEMPORARY HARDCODED TOKEN (REMOVE AFTER TESTING AND USE ENV VARIABLES)
+BOT_TOKEN = "7608434233:AAHK1YuGDGcyqObwiPqBEgMHrfY5MZGAi10"
+# =====================================================================
+
 # Bot configuration
-BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB (Telegram limit)
 RATE_LIMIT_PER_USER = timedelta(minutes=1)
 USER_LAST_REQUEST = {}
@@ -175,8 +179,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Start the bot."""
-    if not BOT_TOKEN:
-        raise ValueError("TELEGRAM_BOT_TOKEN environment variable not set")
+    print("🔍 Debug: Starting bot with token:", BOT_TOKEN[:5] + "...")  # Show partial token
     
     application = Application.builder().token(BOT_TOKEN).build()
     
@@ -189,17 +192,21 @@ def main():
     application.add_error_handler(error_handler)
     
     # Start the Bot
-    if os.getenv('RENDER'):
+    if 'RENDER' in os.environ or 'RENDER_EXTERNAL_HOSTNAME' in os.environ:
         # Running on Render.com
-        port = int(os.getenv('PORT', 8443))
+        port = int(os.environ.get('PORT', 8443))
+        hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '')
+        
+        print(f"🌐 Running on Render with hostname: {hostname}")
+        
         application.run_webhook(
             listen="0.0.0.0",
             port=port,
-            url_path=BOT_TOKEN,
-            webhook_url=f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/{BOT_TOKEN}"
+            webhook_url=f"https://{hostname}/{BOT_TOKEN}"
         )
     else:
-        # Running locally
+        # Fallback to polling (shouldn't happen on Render)
+        print("🔄 Falling back to polling method")
         application.run_polling()
 
 if __name__ == '__main__':

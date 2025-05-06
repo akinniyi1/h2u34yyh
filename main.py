@@ -8,7 +8,9 @@ from urllib.parse import urlparse
 import re
 from datetime import timedelta
 
-# ========== 🔴 TEMPORARY HARDCODED TOKEN (REMOVE LATER!) ==========
+# ==================================================================
+# WARNING: This is for TEMPORARY TESTING ONLY!
+# Remove the hardcoded token after testing and use environment variables
 BOT_TOKEN = "7608434233:AAHK1YuGDGcyqObwiPqBEgMHrfY5MZGAi10"
 # ==================================================================
 
@@ -19,19 +21,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB (Telegram limit)
+# Constants
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB Telegram limit
 RATE_LIMIT_PER_USER = timedelta(minutes=1)
 USER_LAST_REQUEST = {}
 
 SUPPORTED_DOMAINS = [
-    'youtube.com', 'youtu.be',  # YouTube
-    'instagram.com',  # Instagram
-    'tiktok.com',  # TikTok
-    'twitter.com', 'x.com',  # Twitter/X
-    'facebook.com', 'fb.watch',  # Facebook
+    'youtube.com', 'youtu.be',
+    'instagram.com',
+    'tiktok.com',
+    'twitter.com', 'x.com',
+    'facebook.com', 'fb.watch',
 ]
 
 def is_supported_url(url):
+    """Check if URL is from supported domain."""
     try:
         domain = urlparse(url).netloc.lower()
         return any(supported in domain for supported in SUPPORTED_DOMAINS)
@@ -39,20 +43,35 @@ def is_supported_url(url):
         return False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send welcome message."""
     await update.message.reply_text(
-        "Hi! Send me a video link from YouTube/Instagram/TikTok/Twitter/Facebook, "
-        "and I'll download it for you!"
+        "Hi! Send me video links from:\n"
+        "- YouTube\n- Instagram\n- TikTok\n- Twitter/X\n- Facebook\n\n"
+        "I'll download them for you!"
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Process video download requests."""
     user_id = update.effective_user.id
-    urls = re.findall(r'https?://[^\s]+', update.message.text)
+    current_time = update.message.date
     
+    # Rate limiting
+    if user_id in USER_LAST_REQUEST:
+        time_since_last = current_time - USER_LAST_REQUEST[user_id]
+        if time_since_last < RATE_LIMIT_PER_USER:
+            wait_time = (RATE_LIMIT_PER_USER - time_since_last).seconds // 60
+            await update.message.reply_text(f"Please wait {wait_time} minute(s) before another request.")
+            return
+    
+    USER_LAST_REQUEST[user_id] = current_time
+    
+    # Extract URL
+    urls = re.findall(r'https?://[^\s]+', update.message.text)
     if not urls or not is_supported_url(urls[0]):
-        await update.message.reply_text("❌ Unsupported URL. Send a link from YouTube/Instagram/TikTok/Twitter/Facebook.")
+        await update.message.reply_text("❌ Unsupported URL. Send links from supported platforms.")
         return
-
-    message = await update.message.reply_text("⏳ Downloading...")
+    
+    message = await update.message.reply_text("⏳ Downloading video...")
     
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -60,6 +79,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'format': 'best[filesize<50M]',
                 'outtmpl': f'{tmp_dir}/%(title)s.%(ext)s',
                 'quiet': True,
+                'no_warnings': True,
             }
             
             with YoutubeDL(ydl_opts) as ydl:
@@ -75,30 +95,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
             
             await message.delete()
+    
     except Exception as e:
+        logger.error(f"Download error: {str(e)}")
         await message.edit_text(f"❌ Error: {str(e)}")
 
-def main():
-    print("🤖 Starting bot...")
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    # Webhook setup for Render
+async def post_init(application: Application):
+    """Run after bot initialization."""
     if 'RENDER' in os.environ:
         PORT = int(os.environ.get('PORT', 8443))
-        WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{BOT_TOKEN}"
+        webhook_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{BOT_TOKEN}"
         
-        print(f"🌐 Webhook URL: {WEBHOOK_URL}")
+        await application.bot.set_webhook(
+            url=webhook_url,
+            secret_token=os.environ.get('WEBHOOK_SECRET', 'default-secret')
+        )
+        logger.info(f"Webhook configured: {webhook_url}")
+
+def main():
+    """Start the bot."""
+    logger.info("Starting bot...")
+    
+    # Create Application
+    application = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # Start bot
+    if 'RENDER' in os.environ:
+        PORT = int(os.environ.get('PORT', 8443))
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            webhook_url=WEBHOOK_URL,
+            secret_token=os.environ.get('WEBHOOK_SECRET', 'default-secret'),
+            drop_pending_updates=True
         )
     else:
-        print("🔵 Using polling (local testing)")
-        application.run_polling()
+        application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()

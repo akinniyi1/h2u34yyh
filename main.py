@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration (Move to Render ENV Vars after testing)
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7608434233:AAHEowCeyqRiEtkqKhanm2otDnnOMJj0CU8")  # 🔴 Remove hardcoded token after testing
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")  # 🔴 Remove hardcoded token after testing
 SUPPORTED_DOMAINS = ['youtube.com', 'instagram.com', 'tiktok.com']
 PORT = int(os.getenv("PORT", 10000))  # Render uses 10000 by default
 

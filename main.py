@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # ======================================================
 # TEMPORARY CONFIG (Replace with env vars after testing)
-BOT_TOKEN = ""
+BOT_TOKEN = "7608434233:AAHEowCeyqRiEtkqKhanm2otDnnOMJj0CU8"
 SUPPORTED_DOMAINS = ['youtube.com', 'youtu.be', 'instagram.com', 
                     'tiktok.com', 'twitter.com', 'x.com', 
                     'facebook.com', 'fb.watch']
